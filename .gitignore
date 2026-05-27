@@ -9,7 +9,11 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
+*.egg-info/
 *.pyc
+
+# TypeScript
+*.tsbuildinfo
 
 # Local env
 .env
@@ -25,4 +29,3 @@ storage/outputs/
 Thumbs.db
 .idea/
 .vscode/
-
