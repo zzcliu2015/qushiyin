@@ -37,10 +37,29 @@ export type JobResponse = {
   updatedAt: string;
 };
 
+export type AuthorizedSourceResponse = {
+  id: string;
+  platform: Platform;
+  platformLabel: string;
+  sourceUrl: string;
+  normalizedUrl: string;
+  downloadUrl: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type CreateJobInput = {
   sourceUrl: string;
   confirmedRights: boolean;
   watermarkMode: "auto";
+};
+
+type CreateAuthorizedSourceInput = {
+  sourceUrl: string;
+  downloadUrl: string;
+  title?: string;
+  confirmedRights: boolean;
 };
 
 const API_BASE_URL =
@@ -95,4 +114,17 @@ export async function createJob(input: CreateJobInput): Promise<JobResponse> {
 
 export async function getJob(jobId: string): Promise<JobResponse> {
   return requestJson<JobResponse>(`/api/jobs/${jobId}`);
+}
+
+export async function listAuthorizedSources(): Promise<AuthorizedSourceResponse[]> {
+  return requestJson<AuthorizedSourceResponse[]>("/api/sources");
+}
+
+export async function createAuthorizedSource(
+  input: CreateAuthorizedSourceInput
+): Promise<AuthorizedSourceResponse> {
+  return requestJson<AuthorizedSourceResponse>("/api/sources", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
 }

@@ -71,6 +71,7 @@ class JobStore:
 async def run_link_video_processing(
     store: JobStore,
     job_id: str,
+    local_source_store: object,
     source_service: object,
     downloader: object,
     storage: object,
@@ -79,7 +80,9 @@ async def run_link_video_processing(
     try:
         job = store.get(job_id)
         store.update(job_id, status="downloading", progress=10)
-        source_info = await source_service.resolve(platform=job.platform, source_url=job.source_url)
+        source_info = local_source_store.resolve(platform=job.platform, source_url=job.source_url)
+        if source_info is None:
+            source_info = await source_service.resolve(platform=job.platform, source_url=job.source_url)
         input_path = storage.original_path(job_id)
         await downloader.download(download_url=source_info.download_url, destination=input_path)
         output_path = storage.output_path(job_id)

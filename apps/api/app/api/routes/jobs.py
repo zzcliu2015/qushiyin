@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from app.schemas.job import CreateJobRequest, JobResponse
+from app.services.authorized_source_store import AuthorizedSourceStore
 from app.services.job_store import JobStore, JobStoreError, run_link_video_processing
 from app.services.platform_resolver import PlatformResolver, UnsupportedPlatformError
 from app.services.source_fetcher import AuthorizedVideoSourceService, SourceVideoDownloader
@@ -16,6 +17,7 @@ storage = StorageService(root=settings.storage_root)
 video_processor = VideoProcessor()
 source_service = AuthorizedVideoSourceService()
 source_downloader = SourceVideoDownloader()
+authorized_source_store = AuthorizedSourceStore()
 
 
 @router.post(
@@ -43,6 +45,7 @@ def create_job(payload: CreateJobRequest, background_tasks: BackgroundTasks) -> 
         run_link_video_processing,
         job_store,
         job.job_id,
+        authorized_source_store,
         source_service,
         source_downloader,
         storage,

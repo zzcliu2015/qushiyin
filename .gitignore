@@ -20,6 +20,7 @@ __pycache__/
 .env.local
 
 # Runtime files
+storage/authorized-sources.json
 storage/tmp/
 storage/originals/
 storage/outputs/

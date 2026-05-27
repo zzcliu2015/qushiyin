@@ -506,6 +506,7 @@ uv run celery -A app.workers.celery_app worker -l info
 当前实现状态：
 
 - 已通过 `imageio-ffmpeg` 提供本地开发可用的 FFmpeg 二进制。
+- 已实现本地授权源登记：作品链接映射到自有/已授权 MP4 源地址。
 - 已实现授权视频源服务适配器，配置 `AUTH_SOURCE_API_BASE_URL` 后可获取源视频地址。
 - 已提供 `app.dev_mock_source` 用于本地验证完整链接处理链路。
 - Linux 生产环境可通过 `FFMPEG_BINARY=/usr/bin/ffmpeg` 使用系统 FFmpeg。

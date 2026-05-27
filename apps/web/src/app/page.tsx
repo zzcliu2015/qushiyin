@@ -11,7 +11,17 @@ import {
   Search,
   ShieldCheck
 } from "lucide-react";
-import { createJob, getJob, JobResponse, parseLink, ParseLinkResponse, toApiUrl } from "@/lib/api";
+import {
+  createAuthorizedSource,
+  createJob,
+  getJob,
+  listAuthorizedSources,
+  AuthorizedSourceResponse,
+  JobResponse,
+  parseLink,
+  ParseLinkResponse,
+  toApiUrl
+} from "@/lib/api";
 
 const statusLabels: Record<JobResponse["status"], string> = {
   pending: "排队中",
@@ -29,8 +39,14 @@ export default function HomePage() {
   const [parsed, setParsed] = useState<ParseLinkResponse | null>(null);
   const [job, setJob] = useState<JobResponse | null>(null);
   const [confirmedRights, setConfirmedRights] = useState(false);
-  const [loading, setLoading] = useState<"parse" | "job" | null>(null);
+  const [sourceLink, setSourceLink] = useState("");
+  const [downloadUrl, setDownloadUrl] = useState("");
+  const [sourceTitle, setSourceTitle] = useState("");
+  const [sourceRights, setSourceRights] = useState(false);
+  const [authorizedSources, setAuthorizedSources] = useState<AuthorizedSourceResponse[]>([]);
+  const [loading, setLoading] = useState<"parse" | "job" | "source" | "sources" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sourceMessage, setSourceMessage] = useState<string | null>(null);
 
   const canStart = Boolean(parsed && confirmedRights && loading !== "job");
   const isRunning = Boolean(
@@ -56,6 +72,10 @@ export default function HomePage() {
 
     return () => window.clearInterval(timer);
   }, [job, isRunning]);
+
+  useEffect(() => {
+    refreshAuthorizedSources();
+  }, []);
 
   async function handleParse(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,6 +121,48 @@ export default function HomePage() {
   async function handlePaste() {
     const text = await navigator.clipboard.readText();
     setUrl(text);
+  }
+
+  async function refreshAuthorizedSources() {
+    try {
+      setLoading((current) => current ?? "sources");
+      const sources = await listAuthorizedSources();
+      setAuthorizedSources(sources);
+    } catch (err) {
+      setSourceMessage(err instanceof Error ? err.message : "授权源列表加载失败");
+    } finally {
+      setLoading((current) => (current === "sources" ? null : current));
+    }
+  }
+
+  async function handleCreateSource(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSourceMessage(null);
+
+    if (!sourceLink.trim() || !downloadUrl.trim()) {
+      setSourceMessage("请填写平台链接和自有源视频地址");
+      return;
+    }
+
+    try {
+      setLoading("source");
+      await createAuthorizedSource({
+        sourceUrl: sourceLink.trim(),
+        downloadUrl: downloadUrl.trim(),
+        title: sourceTitle.trim() || undefined,
+        confirmedRights: sourceRights
+      });
+      setSourceMessage("授权源已登记，可以在上方粘贴该链接开始处理。");
+      setSourceLink("");
+      setDownloadUrl("");
+      setSourceTitle("");
+      setSourceRights(false);
+      await refreshAuthorizedSources();
+    } catch (err) {
+      setSourceMessage(err instanceof Error ? err.message : "授权源登记失败");
+    } finally {
+      setLoading(null);
+    }
   }
 
   return (
@@ -194,6 +256,53 @@ export default function HomePage() {
               </button>
             </div>
           ) : null}
+
+          <div className="source-block">
+            <h2 className="section-title">登记授权源</h2>
+            <form className="source-form" onSubmit={handleCreateSource}>
+              <input
+                className="url-input"
+                value={sourceLink}
+                onChange={(event) => setSourceLink(event.target.value)}
+                placeholder="抖音或快手作品链接"
+              />
+              <input
+                className="url-input"
+                value={downloadUrl}
+                onChange={(event) => setDownloadUrl(event.target.value)}
+                placeholder="自有或已授权的 MP4 源视频地址"
+              />
+              <input
+                className="url-input"
+                value={sourceTitle}
+                onChange={(event) => setSourceTitle(event.target.value)}
+                placeholder="标题，可选"
+              />
+              <label className="rights-check">
+                <input
+                  checked={sourceRights}
+                  onChange={(event) => setSourceRights(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>我确认该源视频为本人所有、已获授权，或平台允许下载和二次处理。</span>
+              </label>
+              <button
+                className="button secondary"
+                disabled={!sourceRights || loading === "source"}
+                type="submit"
+              >
+                {loading === "source" ? <Loader2 size={18} /> : <ShieldCheck size={18} />}
+                保存授权源
+              </button>
+            </form>
+
+            {sourceMessage ? (
+              <div className={`notice ${sourceMessage.includes("失败") ? "error" : ""}`}>
+                <Link2 size={18} />
+                <span>{sourceMessage}</span>
+              </div>
+            ) : null}
+          </div>
         </section>
 
         <aside className="panel panel-side">
@@ -225,6 +334,12 @@ export default function HomePage() {
             </div>
           ) : (
             <ul className="side-list">
+              {authorizedSources.slice(0, 4).map((source) => (
+                <li key={source.id}>
+                  <strong>{source.title || source.platformLabel}</strong>
+                  <span>{source.normalizedUrl}</span>
+                </li>
+              ))}
               <li>
                 <strong>支持范围</strong>
                 <span>仅支持抖音、快手公开视频链接识别和授权源视频处理。</span>
@@ -244,4 +359,3 @@ export default function HomePage() {
     </main>
   );
 }
-
