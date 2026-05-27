@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from app.schemas.job import JobResponse, JobStatus
 from app.schemas.link import ParseLinkResponse, Platform
+from app.schemas.watermark import WatermarkRegion
 
 
 class JobStoreError(ValueError):
@@ -110,12 +111,13 @@ async def run_video_processing(
     input_path: str,
     output_path: str,
     processor: object,
+    regions: list[WatermarkRegion] | None = None,
 ) -> None:
     try:
         store.update(job_id, status="analyzing", progress=12)
         await asyncio.sleep(0.1)
         store.update(job_id, status="processing", progress=35)
-        await processor.process(input_path=input_path, output_path=output_path)
+        await processor.process(input_path=input_path, output_path=output_path, regions=regions)
         store.update(job_id, status="uploading", progress=92)
         await asyncio.sleep(0.1)
         store.update(

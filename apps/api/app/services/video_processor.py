@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from app.core.config import settings
+from app.schemas.watermark import WatermarkRegion
 
 
 class VideoProcessingError(RuntimeError):
@@ -14,16 +15,32 @@ class VideoProcessor:
     def __init__(self, ffmpeg_binary: str | None = None) -> None:
         self.ffmpeg_binary = ffmpeg_binary or settings.ffmpeg_binary
 
-    async def process(self, *, input_path: str, output_path: str) -> None:
-        await asyncio.to_thread(self._process_sync, Path(input_path), Path(output_path))
+    async def process(
+        self,
+        *,
+        input_path: str,
+        output_path: str,
+        regions: list[WatermarkRegion] | None = None,
+    ) -> None:
+        await asyncio.to_thread(
+            self._process_sync,
+            Path(input_path),
+            Path(output_path),
+            regions,
+        )
 
-    def _process_sync(self, input_path: Path, output_path: Path) -> None:
+    def _process_sync(
+        self,
+        input_path: Path,
+        output_path: Path,
+        regions: list[WatermarkRegion] | None,
+    ) -> None:
         if not input_path.exists():
             raise VideoProcessingError("原视频文件不存在。")
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         ffmpeg = self._resolve_ffmpeg()
-        filter_complex = self._blur_filter()
+        filter_complex = self._blur_filter(regions)
 
         command = [
             ffmpeg,
@@ -97,22 +114,48 @@ class VideoProcessor:
 
         return None
 
-    @staticmethod
-    def _blur_filter() -> str:
-        top_w = "trunc(iw*0.34/2)*2"
-        top_h = "trunc(ih*0.09/2)*2"
-        bottom_w = "trunc(iw*0.36/2)*2"
-        bottom_h = "trunc(ih*0.08/2)*2"
-        bottom_x = "trunc(iw*0.64/2)*2"
-        bottom_y = "trunc(ih*0.90/2)*2"
-        overlay_x = "trunc(main_w*0.64/2)*2"
-        overlay_y = "trunc(main_h*0.90/2)*2"
+    def _blur_filter(self, regions: list[WatermarkRegion] | None) -> str:
+        normalized_regions = regions or self._default_regions()
+        split_count = len(normalized_regions) + 1
+        labels = "[base]" + "".join(f"[wm_src_{index}]" for index in range(len(normalized_regions)))
+        parts = [f"[0:v]split={split_count}{labels};"]
+        current_label = "base"
 
-        return (
-            f"[0:v]split=3[base][top_src][bottom_src];"
-            f"[top_src]crop=w={top_w}:h={top_h}:x=0:y=0,boxblur=10:1[top_blur];"
-            f"[bottom_src]crop=w={bottom_w}:h={bottom_h}:x={bottom_x}:y={bottom_y},"
-            f"boxblur=10:1[bottom_blur];"
-            f"[base][top_blur]overlay=0:0[tmp];"
-            f"[tmp][bottom_blur]overlay=x={overlay_x}:y={overlay_y}[v]"
-        )
+        for index, region in enumerate(normalized_regions):
+            clamped = region.clamped
+            crop_w = self._dimension_expr("iw", clamped.width)
+            crop_h = self._dimension_expr("ih", clamped.height)
+            crop_x = self._position_expr("iw", clamped.x)
+            crop_y = self._position_expr("ih", clamped.y)
+            overlay_x = self._position_expr("main_w", clamped.x)
+            overlay_y = self._position_expr("main_h", clamped.y)
+            blur_label = f"wm_blur_{index}"
+            next_label = "v" if index == len(normalized_regions) - 1 else f"tmp_{index}"
+
+            parts.append(
+                f"[wm_src_{index}]crop=w={crop_w}:h={crop_h}:x={crop_x}:y={crop_y},"
+                f"boxblur=10:1[{blur_label}];"
+            )
+            parts.append(
+                f"[{current_label}][{blur_label}]overlay=x={overlay_x}:y={overlay_y}[{next_label}]"
+            )
+            if index != len(normalized_regions) - 1:
+                parts.append(";")
+            current_label = next_label
+
+        return "".join(parts)
+
+    @staticmethod
+    def _default_regions() -> list[WatermarkRegion]:
+        return [
+            WatermarkRegion(x=0, y=0, width=0.34, height=0.09),
+            WatermarkRegion(x=0.64, y=0.90, width=0.36, height=0.08),
+        ]
+
+    @staticmethod
+    def _dimension_expr(axis: str, ratio: float) -> str:
+        return f"trunc({axis}*{ratio:.6f}/2)*2"
+
+    @staticmethod
+    def _position_expr(axis: str, ratio: float) -> str:
+        return f"trunc({axis}*{ratio:.6f}/2)*2"

@@ -37,6 +37,13 @@ export type JobResponse = {
   updatedAt: string;
 };
 
+export type WatermarkRegion = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 type CreateJobInput = {
   sourceUrl: string;
   confirmedRights: boolean;
@@ -47,6 +54,7 @@ type UploadJobInput = {
   file: File;
   platform: Platform;
   confirmedRights: boolean;
+  watermarkRegions?: WatermarkRegion[];
 };
 
 const API_BASE_URL =
@@ -104,6 +112,9 @@ export async function uploadJob(input: UploadJobInput): Promise<JobResponse> {
   formData.append("file", input.file);
   formData.append("platform", input.platform);
   formData.append("confirmed_rights", String(input.confirmedRights));
+  if (input.watermarkRegions?.length) {
+    formData.append("watermark_regions", JSON.stringify(input.watermarkRegions));
+  }
 
   const response = await fetch(`${API_BASE_URL}/api/jobs/upload`, {
     method: "POST",

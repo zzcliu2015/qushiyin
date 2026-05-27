@@ -509,6 +509,7 @@ uv run celery -A app.workers.celery_app worker -l info
 - 已通过 `imageio-ffmpeg` 提供本地开发可用的 FFmpeg 二进制。
 - Linux 生产环境可通过 `FFMPEG_BINARY=/usr/bin/ffmpeg` 使用系统 FFmpeg。
 - 当前默认处理策略为左上角和右下角局部模糊。
+- 已支持上传时传入最多 5 个手动水印区域，使用百分比坐标适配不同分辨率。
 - 当前任务存储仍为内存版，服务重启后任务记录会丢失。
 
 ### 阶段 4：链接解析

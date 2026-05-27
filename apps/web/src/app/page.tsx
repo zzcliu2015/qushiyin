@@ -8,7 +8,9 @@ import {
   FileVideo,
   Link2,
   Loader2,
+  Plus,
   Play,
+  RotateCcw,
   Search,
   ShieldCheck
 } from "lucide-react";
@@ -20,7 +22,8 @@ import {
   parseLink,
   ParseLinkResponse,
   toApiUrl,
-  uploadJob
+  uploadJob,
+  WatermarkRegion
 } from "@/lib/api";
 
 const statusLabels: Record<JobResponse["status"], string> = {
@@ -34,6 +37,11 @@ const statusLabels: Record<JobResponse["status"], string> = {
   expired: "已过期"
 };
 
+const defaultWatermarkRegions: WatermarkRegion[] = [
+  { x: 0, y: 0, width: 0.34, height: 0.09 },
+  { x: 0.64, y: 0.9, width: 0.36, height: 0.08 }
+];
+
 export default function HomePage() {
   const [url, setUrl] = useState("");
   const [parsed, setParsed] = useState<ParseLinkResponse | null>(null);
@@ -42,6 +50,11 @@ export default function HomePage() {
   const [uploadRights, setUploadRights] = useState(false);
   const [uploadPlatform, setUploadPlatform] = useState<Platform>("douyin");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [watermarkRegions, setWatermarkRegions] = useState<WatermarkRegion[]>([
+    ...defaultWatermarkRegions
+  ]);
+  const [activeRegionIndex, setActiveRegionIndex] = useState(0);
   const [loading, setLoading] = useState<"parse" | "job" | "upload" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,6 +82,17 @@ export default function HomePage() {
 
     return () => window.clearInterval(timer);
   }, [job, isRunning]);
+
+  useEffect(() => {
+    if (!uploadFile) {
+      setPreviewUrl(null);
+      return;
+    }
+
+    const nextUrl = URL.createObjectURL(uploadFile);
+    setPreviewUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [uploadFile]);
 
   async function handleParse(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -124,7 +148,8 @@ export default function HomePage() {
       const result = await uploadJob({
         file: uploadFile,
         platform: uploadPlatform,
-        confirmedRights: uploadRights
+        confirmedRights: uploadRights,
+        watermarkRegions
       });
       setJob(result);
     } catch (err) {
@@ -132,6 +157,42 @@ export default function HomePage() {
     } finally {
       setLoading(null);
     }
+  }
+
+  function addWatermarkRegion() {
+    setWatermarkRegions((regions) => {
+      if (regions.length >= 5) {
+        setActiveRegionIndex(4);
+        return regions;
+      }
+
+      const next = [...regions, { x: 0.32, y: 0.08, width: 0.34, height: 0.1 }];
+      setActiveRegionIndex(next.length - 1);
+      return next;
+    });
+  }
+
+  function resetWatermarkRegions() {
+    setWatermarkRegions([...defaultWatermarkRegions]);
+    setActiveRegionIndex(0);
+  }
+
+  function clearWatermarkRegions() {
+    setWatermarkRegions([]);
+    setActiveRegionIndex(0);
+  }
+
+  function updateRegion(index: number, patch: Partial<WatermarkRegion>) {
+    setWatermarkRegions((regions) =>
+      regions.map((region, regionIndex) =>
+        regionIndex === index ? clampRegion({ ...region, ...patch }) : region
+      )
+    );
+  }
+
+  function removeRegion(index: number) {
+    setWatermarkRegions((regions) => regions.filter((_, regionIndex) => regionIndex !== index));
+    setActiveRegionIndex((current) => Math.max(0, Math.min(current, watermarkRegions.length - 2)));
   }
 
   async function handlePaste() {
@@ -272,6 +333,72 @@ export default function HomePage() {
               />
             </label>
 
+            {previewUrl ? (
+              <div className="preview-tool">
+                <div className="preview-stage">
+                  <video muted controls preload="metadata" src={previewUrl} />
+                  <div className="region-layer" aria-label="水印区域">
+                    {watermarkRegions.map((region, index) => (
+                      <button
+                        className={`region-box ${activeRegionIndex === index ? "active" : ""}`}
+                        key={`${region.x}-${region.y}-${index}`}
+                        onClick={() => setActiveRegionIndex(index)}
+                        style={{
+                          left: `${region.x * 100}%`,
+                          top: `${region.y * 100}%`,
+                          width: `${region.width * 100}%`,
+                          height: `${region.height * 100}%`
+                        }}
+                        title={`水印区域 ${index + 1}`}
+                        type="button"
+                      >
+                        {index + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="region-controls">
+                  <div className="control-row">
+                    <button className="button secondary" type="button" onClick={addWatermarkRegion}>
+                      <Plus size={17} />
+                      添加区域
+                    </button>
+                    <button
+                      className="button secondary"
+                      type="button"
+                      onClick={resetWatermarkRegions}
+                    >
+                      <RotateCcw size={17} />
+                      默认区域
+                    </button>
+                  </div>
+
+                  {watermarkRegions.length ? (
+                    <RegionEditor
+                      index={activeRegionIndex}
+                      region={watermarkRegions[Math.min(activeRegionIndex, watermarkRegions.length - 1)]}
+                      onRemove={() =>
+                        removeRegion(Math.min(activeRegionIndex, watermarkRegions.length - 1))
+                      }
+                      onUpdate={(patch) =>
+                        updateRegion(Math.min(activeRegionIndex, watermarkRegions.length - 1), patch)
+                      }
+                    />
+                  ) : (
+                    <div className="notice">
+                      <Link2 size={18} />
+                      <span>未设置手动区域，后端会使用默认角标区域。</span>
+                    </div>
+                  )}
+
+                  <button className="text-button" type="button" onClick={clearWatermarkRegions}>
+                    清空手动区域
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             <label className="rights-check">
               <input
                 checked={uploadRights}
@@ -339,4 +466,70 @@ export default function HomePage() {
       </div>
     </main>
   );
+}
+
+function RegionEditor({
+  index,
+  region,
+  onRemove,
+  onUpdate
+}: {
+  index: number;
+  region: WatermarkRegion;
+  onRemove: () => void;
+  onUpdate: (patch: Partial<WatermarkRegion>) => void;
+}) {
+  return (
+    <div className="region-editor">
+      <div className="region-editor-head">
+        <strong>区域 {index + 1}</strong>
+        <button className="text-button danger" type="button" onClick={onRemove}>
+          删除
+        </button>
+      </div>
+      <SliderField label="水平位置" value={region.x} onChange={(x) => onUpdate({ x })} />
+      <SliderField label="垂直位置" value={region.y} onChange={(y) => onUpdate({ y })} />
+      <SliderField label="宽度" value={region.width} onChange={(width) => onUpdate({ width })} />
+      <SliderField label="高度" value={region.height} onChange={(height) => onUpdate({ height })} />
+    </div>
+  );
+}
+
+function SliderField({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="slider-field">
+      <span>
+        {label}
+        <strong>{Math.round(value * 100)}%</strong>
+      </span>
+      <input
+        max="1"
+        min="0"
+        onChange={(event) => onChange(Number(event.target.value))}
+        step="0.01"
+        type="range"
+        value={value}
+      />
+    </label>
+  );
+}
+
+function clampRegion(region: WatermarkRegion): WatermarkRegion {
+  const x = clamp(region.x, 0, 0.98);
+  const y = clamp(region.y, 0, 0.98);
+  const width = clamp(region.width, 0.01, 1 - x);
+  const height = clamp(region.height, 0.01, 1 - y);
+  return { x, y, width, height };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
