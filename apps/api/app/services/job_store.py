@@ -1,11 +1,9 @@
-import asyncio
 from datetime import UTC, datetime
 from threading import Lock
 from uuid import uuid4
 
 from app.schemas.job import JobResponse, JobStatus
 from app.schemas.link import ParseLinkResponse, Platform
-from app.schemas.watermark import WatermarkRegion
 
 
 class JobStoreError(ValueError):
@@ -27,26 +25,6 @@ class JobStore:
             status="pending",
             progress=0,
             title=parsed.title,
-            output_url=None,
-            error_message=None,
-            created_at=now,
-            updated_at=now,
-        )
-        with self._lock:
-            self._jobs[job.job_id] = job
-        return job
-
-    def create_upload(self, *, original_filename: str, platform: Platform) -> JobResponse:
-        now = datetime.now(UTC)
-        platform_label = "抖音" if platform == "douyin" else "快手"
-        job = JobResponse(
-            job_id=str(uuid4()),
-            source_url=f"upload://{original_filename}",
-            platform=platform,
-            platform_label=platform_label,
-            status="pending",
-            progress=0,
-            title=original_filename,
             output_url=None,
             error_message=None,
             created_at=now,
@@ -90,36 +68,25 @@ class JobStore:
             return updated
 
 
-async def run_mock_processing(store: JobStore, job_id: str) -> None:
-    steps: tuple[tuple[JobStatus, int, float], ...] = (
-        ("downloading", 18, 0.8),
-        ("analyzing", 42, 0.9),
-        ("processing", 74, 1.1),
-        ("uploading", 92, 0.7),
-        ("completed", 100, 0.2),
-    )
-
-    for status, progress, delay in steps:
-        await asyncio.sleep(delay)
-        output_url = f"/api/jobs/{job_id}/download" if status == "completed" else None
-        store.update(job_id, status=status, progress=progress, output_url=output_url)
-
-
-async def run_video_processing(
+async def run_link_video_processing(
     store: JobStore,
     job_id: str,
-    input_path: str,
-    output_path: str,
+    source_service: object,
+    downloader: object,
+    storage: object,
     processor: object,
-    regions: list[WatermarkRegion] | None = None,
 ) -> None:
     try:
-        store.update(job_id, status="analyzing", progress=12)
-        await asyncio.sleep(0.1)
+        job = store.get(job_id)
+        store.update(job_id, status="downloading", progress=10)
+        source_info = await source_service.resolve(platform=job.platform, source_url=job.source_url)
+        input_path = storage.original_path(job_id)
+        await downloader.download(download_url=source_info.download_url, destination=input_path)
+        output_path = storage.output_path(job_id)
+        store.update(job_id, status="analyzing", progress=34)
         store.update(job_id, status="processing", progress=35)
-        await processor.process(input_path=input_path, output_path=output_path, regions=regions)
+        await processor.process(input_path=str(input_path), output_path=str(output_path))
         store.update(job_id, status="uploading", progress=92)
-        await asyncio.sleep(0.1)
         store.update(
             job_id,
             status="completed",

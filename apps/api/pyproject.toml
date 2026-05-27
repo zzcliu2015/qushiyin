@@ -5,10 +5,10 @@ description = "FastAPI service for authorized short video watermark processing."
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0",
+  "httpx>=0.28.0",
   "imageio-ffmpeg>=0.5.1",
   "pydantic>=2.9.0",
   "pydantic-settings>=2.6.0",
-  "python-multipart>=0.0.20",
   "uvicorn[standard]>=0.32.0"
 ]
 

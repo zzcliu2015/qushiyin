@@ -51,7 +51,7 @@ class PlatformResolver:
             width=None,
             height=None,
             can_fetch_directly=False,
-            requires_upload=True,
+            requires_upload=False,
         )
 
     def _match_rule(self, hostname: str) -> PlatformRule | None:

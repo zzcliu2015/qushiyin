@@ -1,10 +1,12 @@
 # qushiuyin
 
-短视频去水印网页程序项目。
+抖音 / 快手链接去水印网页程序。
 
-当前阶段：第三阶段处理中。已支持抖音、快手链接识别、任务创建、任务进度查询、视频上传、手动水印区域设置、FFmpeg 局部模糊处理和真实 MP4 下载。抖音/快手链接直取源视频仍需要接入授权获取模块。
+当前版本只保留链接处理流程：用户粘贴抖音或快手链接，后端通过已配置的授权视频源服务获取源视频，再使用 FFmpeg 进行局部水印区域处理，最后提供 MP4 下载。
 
-当前已完成开发文档：
+> 注意：本项目不内置绕过平台限制的抓取逻辑。源视频必须由你配置的官方、授权或自有服务提供。
+
+开发文档：
 
 - [短视频去水印网页程序开发文档](docs/short-video-watermark-remover-dev.md)
 
@@ -12,7 +14,7 @@
 
 - 前端：Next.js + TypeScript
 - 后端：FastAPI + Pydantic
-- 后续处理：FFmpeg / OpenCV
+- 视频处理：FFmpeg
 - 后续部署：Linux + Nginx + Docker Compose
 
 ## 本地启动
@@ -47,33 +49,70 @@ npm run dev:web
 - 前端：http://localhost:3000
 - 后端健康检查：http://127.0.0.1:8000/health
 
+## 本地联调授权源
+
+仓库内提供一个开发用 mock 授权源服务，方便验证完整链路：
+
+```bash
+python -m uvicorn app.dev_mock_source:app --app-dir apps/api --host 127.0.0.1 --port 8010
+```
+
+然后启动 API 前设置：
+
+```bash
+AUTH_SOURCE_API_BASE_URL=http://127.0.0.1:8010
+AUTH_SOURCE_API_TOKEN=dev-token
+ALLOW_PRIVATE_SOURCE_URLS=true
+```
+
+`ALLOW_PRIVATE_SOURCE_URLS=true` 只建议本地联调用，生产环境保持默认 `false`。
+
 ## 当前功能
 
 - 抖音链接识别。
 - 快手链接识别。
 - 支持从分享文案里提取第一个链接。
-- 创建链接任务。
-- 上传 MP4 / MOV / M4V / WEBM 视频并处理。
+- 创建链接处理任务。
+- 通过授权视频源服务获取源视频地址。
+- 下载授权源视频到本地任务目录。
 - 使用 FFmpeg 对常见角标水印区域进行局部模糊。
-- 上传前可在视频预览上配置最多 5 个水印区域。
 - 网页端轮询任务进度。
-- 上传任务完成后下载真实 MP4。
+- 任务完成后下载处理后的 MP4。
 
-## 处理策略
+## 授权视频源服务
 
-当前 FFmpeg 滤镜支持两种区域来源：
+后端需要配置：
 
-- 手动区域：前端以百分比坐标传给后端，适配不同分辨率。
-- 默认区域：未设置手动区域时，使用左上角和右下角常见水印区域。
+```bash
+AUTH_SOURCE_API_BASE_URL=https://your-authorized-source-service.example
+AUTH_SOURCE_API_TOKEN=your-token
+```
 
-后续会加入拖拽式框选、自动水印检测和局部修复算法。
+该服务需要提供：
 
-## 下一步
+```http
+POST /resolve
+Content-Type: application/json
+Authorization: Bearer your-token
+```
 
-- 接入抖音/快手授权视频获取模块。
-- 增加拖拽式框选水印区域。
-- 将内存任务替换为 Redis 队列和 PostgreSQL。
-- 增加 Linux 部署配置。
+请求：
+
+```json
+{
+  "platform": "douyin",
+  "sourceUrl": "https://v.douyin.com/example/"
+}
+```
+
+响应：
+
+```json
+{
+  "downloadUrl": "https://authorized-cdn.example/video.mp4",
+  "title": "可选标题"
+}
+```
 
 ## Linux 部署提示
 
@@ -89,4 +128,11 @@ sudo apt install -y ffmpeg
 ```bash
 FFMPEG_BINARY=/usr/bin/ffmpeg
 STORAGE_ROOT=/data/qushiuyin/storage
+MAX_SOURCE_VIDEO_MB=200
 ```
+
+## 下一步
+
+- 将内存任务替换为 Redis 队列和 PostgreSQL。
+- 增加 Linux Docker Compose 生产配置。
+- 增加任务过期清理。
