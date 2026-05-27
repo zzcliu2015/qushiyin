@@ -1,0 +1,16 @@
+{
+  "name": "qushiuyin",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace apps/web run dev",
+    "build:web": "npm --workspace apps/web run build",
+    "typecheck:web": "npm --workspace apps/web run typecheck",
+    "dev:api": "python -m uvicorn app.main:app --reload --app-dir apps/api",
+    "check:api": "python -m compileall apps/api/app"
+  }
+}
+
